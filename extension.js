@@ -48,16 +48,23 @@ export default class RpmOstreeStateExtension extends Extension {
     }
 
     disable() {
-        if (this._button?.get_parent()) {
-            this._button.get_parent().remove_child(this._button);
-        }
-        this._button = null;
-
         // Remove the timeout source so it stops updating
         if (this._timeoutId) {
             GLib.Source.remove(this._timeoutId);
             this._timeoutId = null;
         }
+        
+        // Remove the button from the panel
+        if (this._button?.get_parent()) {
+            this._button.get_parent().remove_child(this._button);
+        }
+        this._button = null;
+
+        // Destroy the icons
+        this._busyIcon?.destroy();
+        this._busyIcon = null;
+        this._idleIcon?.destroy();
+        this._idleIcon = null;
     }
 
     _updateState() {
@@ -85,7 +92,7 @@ export default class RpmOstreeStateExtension extends Extension {
                     if (ok && proc.get_successful()) {
                         stateText = stdout.trim() || 'N/A';
                     } else {
-                        logError(e, 'Error processing Subprocess: ' + stderr.trim());
+                        logError(e, 'Error processing Subprocess' + stderr.trim());
                         this.disable();
                     }
 
