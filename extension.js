@@ -85,7 +85,8 @@ export default class RpmOstreeStateExtension extends Extension {
                     if (ok && proc.get_successful()) {
                         stateText = stdout.trim() || 'N/A';
                     } else {
-                        stateText = stderr.trim() || 'Error';
+                        logError(e, 'Error processing Subprocess: ' + stderr.trim());
+                        this.disable();
                     }
 
                     // Decide which icon to display based on state
