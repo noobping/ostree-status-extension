@@ -3,5 +3,6 @@
   "name": "OSTree Status",
   "description": "Show rpm-ostree status in the GNOME.",
   "shell-version": ["47"],
-  "main": "extension.js"
+  "url": "https://github.com/noobping/ostree-status-extension",
+  "version": 1
 }
