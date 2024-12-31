@@ -9,11 +9,11 @@ export default class RpmOstreeStateExtension extends Extension {
         try {
             // Create icons for different states
             this._busyIcon = new St.Icon({
-                icon_name: 'process-working-symbolic',
+                icon_name: 'software-update-available-symbolic',
                 style_class: 'system-status-icon',
             });
             this._idleIcon = new St.Icon({
-                icon_name: 'media-playback-start-symbolic',
+                icon_name: 'org.gnome.Software-symbolic',
                 style_class: 'system-status-icon',
             });
 
