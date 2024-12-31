@@ -7,17 +7,26 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 export default class RpmOstreeStateExtension extends Extension {
     enable() {
         try {
-            // Create a button with text directly
+            // Create icons for different states
+            this._busyIcon = new St.Icon({
+                icon_name: 'software-update-available-symbolic',
+                style_class: 'system-status-icon',
+            });
+            this._idleIcon = new St.Icon({
+                icon_name: 'org.gnome.Software-symbolic',
+                style_class: 'system-status-icon',
+            });
+
             this._button = new St.Button({
-                label: 'Loading...',
                 style_class: 'panel-button',
                 can_focus: true,
             });
+            this._button.set_child(this._busyIcon);
 
             // Insert the button into the panel
             Main.panel._rightBox.insert_child_at_index(this._button, 0);
 
-            // Clicking the button triggers a refresh
+            // Clicking the button triggers an immediate refresh
             this._button.connect('button-press-event', () => {
                 this._updateState();
             });
@@ -26,7 +35,7 @@ export default class RpmOstreeStateExtension extends Extension {
             this._updateState();
             this._timeoutId = GLib.timeout_add_seconds(
                 GLib.PRIORITY_DEFAULT,
-                90,
+                10, // update interval in seconds
                 () => {
                     this._updateState();
                     return GLib.SOURCE_CONTINUE;
@@ -54,7 +63,7 @@ export default class RpmOstreeStateExtension extends Extension {
     _updateState() {
         // Command to run
         const command = [
-            'bash',
+            'sh',
             '-c',
             "rpm-ostree status | grep '^State:' | awk '{print $2}'",
         ];
@@ -70,17 +79,24 @@ export default class RpmOstreeStateExtension extends Extension {
             proc.communicate_utf8_async(null, null, (obj, res) => {
                 try {
                     const [ok, stdout, stderr] = proc.communicate_utf8_finish(res);
-                    let text = '';
 
+                    // Trim output to see which state we have
+                    let stateText = '';
                     if (ok && proc.get_successful()) {
-                        text = stdout.trim() || 'N/A';
+                        stateText = stdout.trim() || 'N/A';
                     } else {
-                        text = stderr.trim() || 'Error';
+                        stateText = stderr.trim() || 'Error';
                     }
 
-                    // Update the button label if still valid
-                    if (this._button) {
-                        this._button.label = text;
+                    // Decide which icon to display based on state
+                    if (!this._button) {
+                        return; // In case it's disabled in the meantime
+                    }
+
+                    if (stateText === 'idle') {
+                        this._button.set_child(this._idleIcon);
+                    } else {
+                        this._button.set_child(this._busyIcon);
                     }
                 } catch (e) {
                     logError(e, 'Error processing Subprocess output');
