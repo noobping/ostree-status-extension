@@ -2,7 +2,7 @@
   "uuid": "ostree-status@noobping.dev",
   "name": "OSTree Status",
   "description": "Show rpm-ostree status in the GNOME.",
-  "shell-version": ["47"],
+  "shell-version": ["47","48"],
   "url": "https://github.com/noobping/ostree-status-extension",
   "version": 1
 }
