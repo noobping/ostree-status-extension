@@ -1,0 +1,35 @@
+name: install-local
+on:
+  - manual
+
+steps:
+  - name: install extension
+    container: false
+    run: |
+      set -eu
+
+      uuid="$(sed -n 's/.*"uuid"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' metadata.json)"
+      test -n "$uuid"
+      target="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$uuid"
+
+      rm -rf "$target"
+      mkdir -p "$target"
+
+      install -m0644 \
+        extension.js \
+        metadata.json \
+        software-update-available-symbolic.svg \
+        verified-checkmark-symbolic.svg \
+        "$target/"
+
+      printf 'Installed %s to %s\n' "$uuid" "$target"
+
+  - name: enable extension
+    if: exists(cmd:gnome-extensions)
+    container: false
+    run: |
+      set -eu
+
+      uuid="$(sed -n 's/.*"uuid"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' metadata.json)"
+      test -n "$uuid"
+      gnome-extensions enable "$uuid" || true
