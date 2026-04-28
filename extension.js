@@ -4,18 +4,15 @@ import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
+const BUSY_ICON = 'software-update-available-symbolic.svg';
+const IDLE_ICON = 'verified-checkmark-symbolic.svg';
+
 export default class RpmOstreeStateExtension extends Extension {
     enable() {
         try {
             // Create icons for different states
-            this._busyIcon = new St.Icon({
-                icon_name: 'software-update-available-symbolic',
-                style_class: 'system-status-icon',
-            });
-            this._idleIcon = new St.Icon({
-                icon_name: 'org.gnome.Software-symbolic',
-                style_class: 'system-status-icon',
-            });
+            this._busyIcon = this._makeStatusIcon(BUSY_ICON);
+            this._idleIcon = this._makeStatusIcon(IDLE_ICON);
 
             this._button = new St.Button({
                 style_class: 'panel-button',
@@ -45,6 +42,17 @@ export default class RpmOstreeStateExtension extends Extension {
             logError(error, 'Error enabling RpmOstreeStateExtension');
             this.disable();
         }
+    }
+
+    _makeStatusIcon(iconFileName) {
+        const file = Gio.File.new_for_path(
+            GLib.build_filenamev([this.path, iconFileName])
+        );
+
+        return new St.Icon({
+            gicon: new Gio.FileIcon({ file }),
+            style_class: 'system-status-icon',
+        });
     }
 
     disable() {
