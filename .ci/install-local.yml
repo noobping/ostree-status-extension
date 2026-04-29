@@ -1,6 +1,7 @@
 name: install-local
 on:
   - manual
+  - pre-push
 
 steps:
   - name: install extension
