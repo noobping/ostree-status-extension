@@ -1,4 +1,4 @@
-
+[![License: MIT](https://img.shields.io/badge/License-MIT-default.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/noobping/ostree-status-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/noobping/ostree-status-extension/actions/workflows/ci.yml)
 
 # OSTree Status extension
