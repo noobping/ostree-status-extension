@@ -1,3 +1,6 @@
+
+[![CI](https://github.com/noobping/ostree-status-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/noobping/ostree-status-extension/actions/workflows/ci.yml)
+
 # OSTree Status extension
 Display the rpm-ostree status in GNOME. Click to refresh manually or wait 10 seconds for an automatic refresh.
 
