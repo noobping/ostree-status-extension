@@ -1,4 +1,5 @@
 name: install-local
+needs: check
 on:
   - manual
   - pre-push

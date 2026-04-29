@@ -1,0 +1,33 @@
+name: check
+on:
+  - manual
+  - pre-push
+
+artifacts:
+  paths:
+    - dist/shexli.json
+  mode: keep
+
+steps:
+  - name: shexli
+    container:
+      image: python:3.13-slim
+    run: |
+      set -eu
+
+      python3 -m pip install --no-cache-dir --disable-pip-version-check --root-user-action=ignore shexli==0.2.1
+
+      staging="$(mktemp -d)"
+      trap 'rm -rf "$staging"' EXIT
+
+      install -m0644 \
+        extension.js \
+        metadata.json \
+        software-update-available-symbolic.svg \
+        verified-checkmark-symbolic.svg \
+        "$staging/"
+
+      mkdir -p dist
+      shexli --format text "$staging"
+      shexli --format json "$staging" > dist/shexli.json
+      grep -q '"status": "clean"' dist/shexli.json

@@ -1,4 +1,5 @@
 name: package
+needs: check
 on:
   - manual
 
