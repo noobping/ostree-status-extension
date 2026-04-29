@@ -109,7 +109,8 @@ export default class RpmOstreeStateExtension extends Extension {
                     if (ok && proc.get_successful()) {
                         stateText = stdout.trim() || 'N/A';
                     } else {
-                        logError(e, 'Error processing Subprocess' + stderr.trim());
+                        logError(new Error(stderr.trim() || 'rpm-ostree status failed'),
+                            'Error processing Subprocess output');
                         this.disable();
                     }
 

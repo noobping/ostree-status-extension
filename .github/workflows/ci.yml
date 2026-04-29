@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - main
+    - master
+  pull_request:
+    branches:
+    - main
+    - master
+  workflow_dispatch:
+
+jobs:
+  gnome-shell-extension:
+    name: GNOME Shell 50 extension smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install noobping/ci
+        run: |
+          case "$(uname -m)" in
+            x86_64) ci_arch=amd64 ;;
+            aarch64) ci_arch=arm64 ;;
+            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+
+          sudo curl -fsSL \
+            "https://github.com/noobping/ci/releases/download/continuous/ci-linux-${ci_arch}" \
+            -o /usr/local/bin/ci
+          sudo chmod +x /usr/local/bin/ci
+          ci self
+
+      - name: Run project CI
+        run: ci -vv run test
+
+      - name: Upload GNOME Shell test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnome-shell-test-log
+          path: dist/gnome-shell-test.log
+          if-no-files-found: ignore

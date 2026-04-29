@@ -1,0 +1,92 @@
+name: test
+on:
+  - manual
+needs: package
+
+container:
+  image: fedora:44
+  packages:
+    - coreutils
+    - dbus-daemon
+    - dbus-tools
+    - gnome-shell
+    - mesa-dri-drivers
+    - which
+
+env:
+  G_MESSAGES_DEBUG: GNOME Shell
+  LIBGL_ALWAYS_SOFTWARE: "1"
+  NO_AT_BRIDGE: "1"
+  RPM_OSTREE_TEST_STATE_FILE: /tmp/rpm-ostree-test-state
+  XDG_RUNTIME_DIR: /run/user/0
+
+steps:
+  - name: verify GNOME Shell test tooling
+    run: |
+      set -eu
+
+      command -v dbus-run-session
+      command -v gnome-shell
+      command -v gnome-shell-test-tool
+      gnome-shell --version
+      gnome-shell-test-tool --version || true
+      gnome-shell-test-tool --help | grep -q -- '--extension'
+
+  - name: prepare fake rpm-ostree
+    run: |
+      set -eu
+
+      mkdir -p dist/test-bin
+
+      cat > dist/test-bin/rpm-ostree <<'EOF'
+      #!/bin/sh
+      set -eu
+
+      state="${RPM_OSTREE_TEST_STATE:-idle}"
+
+      if [ -n "${RPM_OSTREE_TEST_STATE_FILE:-}" ] && [ -r "$RPM_OSTREE_TEST_STATE_FILE" ]; then
+        state="$(cat "$RPM_OSTREE_TEST_STATE_FILE")"
+      fi
+
+      printf 'State: %s\n' "$state"
+      EOF
+      chmod +x dist/test-bin/rpm-ostree
+
+  - name: run headless GNOME Shell extension test
+    run: |
+      set -eu
+
+      export PATH="$PWD/dist/test-bin:$PATH"
+      mkdir -p "$XDG_RUNTIME_DIR" dist
+      chmod 700 "$XDG_RUNTIME_DIR"
+      printf 'idle\n' > "$RPM_OSTREE_TEST_STATE_FILE"
+      rpm-ostree status
+
+      system_bus_output="$(dbus-daemon --session --fork --print-address=1 --print-pid=1)"
+      DBUS_SYSTEM_BUS_ADDRESS="$(printf '%s\n' "$system_bus_output" | sed -n '1p')"
+      system_bus_pid="$(printf '%s\n' "$system_bus_output" | sed -n '2p')"
+      export DBUS_SYSTEM_BUS_ADDRESS
+      trap 'kill "$system_bus_pid" 2>/dev/null || true' EXIT
+
+      log_file=dist/gnome-shell-test.log
+
+      set +e
+      timeout --foreground --verbose 180s \
+        dbus-run-session -- \
+          gnome-shell-test-tool \
+            --headless \
+            --disable-animations \
+            --extension dist/ostree-status@noobping.dev.zip \
+            tests/test-extension.js \
+          >"$log_file" 2>&1
+      status=$?
+      set -e
+
+      cat "$log_file"
+      printf 'gnome-shell-test-tool exited with status %s\n' "$status"
+      exit "$status"
+
+artifacts:
+  paths:
+    - dist/gnome-shell-test.log
+  mode: keep
