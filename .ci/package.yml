@@ -1,0 +1,37 @@
+name: package
+on:
+  - manual
+
+artifacts:
+  paths:
+    - dist/*.zip
+  mode: keep
+
+steps:
+  - name: package zip
+    container:
+      packages:
+        - zip
+        - unzip
+    run: |
+      set -eu
+
+      uuid="$(sed -n 's/.*"uuid"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' metadata.json)"
+      test -n "$uuid"
+
+      mkdir -p dist
+      zip_file="dist/$uuid.zip"
+      rm -f "$zip_file"
+
+      zip -9 -X "$zip_file" \
+        extension.js \
+        metadata.json \
+        software-update-available-symbolic.svg \
+        verified-checkmark-symbolic.svg
+
+      zipinfo -1 "$zip_file" | grep -qx metadata.json
+      zipinfo -1 "$zip_file" | grep -qx extension.js
+      zipinfo -1 "$zip_file" | grep -qx software-update-available-symbolic.svg
+      zipinfo -1 "$zip_file" | grep -qx verified-checkmark-symbolic.svg
+
+      printf 'Created %s\n' "$zip_file"
