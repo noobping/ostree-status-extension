@@ -24,7 +24,7 @@ export default class RpmOstreeStateExtension extends Extension {
             Main.panel._rightBox.insert_child_at_index(this._button, 0);
 
             // Clicking the button triggers an immediate refresh
-            this._button.connect('button-press-event', () => {
+            this._buttonPressId = this._button.connect('button-press-event', () => {
                 this._updateState();
             });
 
@@ -62,11 +62,20 @@ export default class RpmOstreeStateExtension extends Extension {
             this._timeoutId = null;
         }
         
-        // Remove the button from the panel
-        if (this._button?.get_parent()) {
-            this._button.get_parent().remove_child(this._button);
+        if (this._buttonPressId && this._button) {
+            this._button.disconnect(this._buttonPressId);
+            this._buttonPressId = null;
         }
-        this._button = null;
+
+        // Remove and destroy the button from the panel
+        if (this._button) {
+            if (this._button.get_parent()) {
+                this._button.get_parent().remove_child(this._button);
+            }
+            this._button.set_child(null);
+            this._button.destroy();
+            this._button = null;
+        }
 
         // Destroy the icons
         this._busyIcon?.destroy();
