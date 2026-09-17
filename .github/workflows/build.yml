@@ -188,7 +188,7 @@ jobs:
           gh release create "$PRERELEASE_TAG" \
             "${archives[0]}" \
             --target "$GITHUB_SHA" \
-            --title "GNOME $GNOME_VERSION pre-release" \
+            --title "GNOME $GNOME_VERSION" \
             --prerelease \
             --latest=false \
             --generate-notes
