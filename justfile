@@ -36,7 +36,7 @@ check-shell:
 check-whitespace:
     git diff --check
     git diff --cached --check
-    git log -1 --check --format=
+    if git grep --cached -nI -E '[[:blank:]]+$' -- .; then exit 1; fi
 
 shexli:
     tests/check-shexli
