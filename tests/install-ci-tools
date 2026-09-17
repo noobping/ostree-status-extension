@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly destination="${1:-/tmp/pipeline-tools}"
+readonly pipeline_release='https://github.com/noobping/pipeline/releases/download/continuous'
+readonly just_version='1.58.0'
+readonly just_release="https://github.com/casey/just/releases/download/${just_version}"
+
+case $(uname -m) in
+    x86_64)
+        pipeline_arch='amd64'
+        just_target='x86_64-unknown-linux-musl'
+        just_sha256='4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d'
+        ;;
+    aarch64)
+        pipeline_arch='arm64'
+        just_target='aarch64-unknown-linux-musl'
+        just_sha256='748237128c4c40cbdabc65e841d05ceba13cc23a91eaba395495894c1d9764df'
+        ;;
+    *)
+        echo "unsupported architecture: $(uname -m)" >&2
+        exit 1
+        ;;
+esac
+
+temporary=$(mktemp -d)
+trap 'rm -rf -- "$temporary"' EXIT
+
+pipeline_asset="pipeline-linux-${pipeline_arch}"
+curl -fsSL "${pipeline_release}/${pipeline_asset}" -o "${temporary}/${pipeline_asset}"
+curl -fsSL "${pipeline_release}/${pipeline_asset}.sha256" \
+    -o "${temporary}/${pipeline_asset}.sha256"
+(
+    cd "$temporary"
+    sha256sum --check "${pipeline_asset}.sha256"
+)
+
+just_asset="just-${just_version}-${just_target}.tar.gz"
+curl -fsSL "${just_release}/${just_asset}" -o "${temporary}/${just_asset}"
+printf '%s  %s\n' "$just_sha256" "${temporary}/${just_asset}" | sha256sum --check
+tar -xzf "${temporary}/${just_asset}" -C "$temporary" just
+
+install -d -m0755 "$destination"
+install -m0755 "${temporary}/${pipeline_asset}" "${destination}/pipeline"
+install -m0755 "${temporary}/just" "${destination}/just"
+
+"${destination}/pipeline" --version
+"${destination}/just" --version

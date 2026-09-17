@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly report='dist/shexli.json'
+readonly image="${SHEXLI_IMAGE:-docker.io/library/python:3.13-slim}"
+
+run_shexli() (
+    set -euo pipefail
+    staging=$(mktemp -d)
+    trap 'rm -rf -- "$staging"' EXIT
+
+    install -m0644 \
+        extension.js \
+        metadata.json \
+        software-update-available-symbolic.svg \
+        verified-checkmark-symbolic.svg \
+        "$staging/"
+
+    shexli --format text "$staging" >&2
+    shexli --format json "$staging"
+)
+
+find_container_engine() {
+    if [[ -n ${CONTAINER_ENGINE:-} ]]; then
+        command -v "$CONTAINER_ENGINE"
+    elif command -v podman >/dev/null 2>&1; then
+        command -v podman
+    elif command -v docker >/dev/null 2>&1; then
+        command -v docker
+    else
+        echo 'shexli is not installed and neither Podman nor Docker is available' >&2
+        return 1
+    fi
+}
+
+mkdir -p dist
+temporary_report="${report}.tmp"
+trap 'rm -f -- "$temporary_report"' EXIT
+
+if command -v shexli >/dev/null 2>&1; then
+    run_shexli >"$temporary_report"
+else
+    engine=$(find_container_engine)
+    "$engine" run --rm --pull=missing --security-opt label=disable \
+        --volume "$PWD:/work:ro" \
+        --workdir /work \
+        "$image" \
+        sh -ceu '
+            python3 -m pip install \
+                --disable-pip-version-check \
+                --no-cache-dir \
+                --root-user-action=ignore \
+                shexli==0.2.1 >&2
+            staging=$(mktemp -d)
+            trap '\''rm -rf -- "$staging"'\'' EXIT
+            install -m0644 \
+                extension.js \
+                metadata.json \
+                software-update-available-symbolic.svg \
+                verified-checkmark-symbolic.svg \
+                "$staging/"
+            shexli --format text "$staging" >&2
+            shexli --format json "$staging"
+        ' >"$temporary_report"
+fi
+
+mv -f -- "$temporary_report" "$report"
+trap - EXIT
+
+if grep -q '"status": "clean"' "$report"; then
+    :
+elif grep -Eq '"finding_count":[[:space:]]*1[[:space:]]*,' "$report" &&
+    [[ $(grep -c '"rule_id":' "$report") -eq 1 ]] &&
+    grep -q '"rule_id": "EGO-M-004"' "$report" &&
+    grep -Eq '"shell-version"[[:space:]]*:[[:space:]]*\[[^]]*"51"' metadata.json; then
+    echo 'shexli 0.2.1 does not recognize GNOME 51; allowing only its stale EGO-M-004 finding' >&2
+else
+    echo 'shexli reported actionable findings' >&2
+    exit 1
+fi

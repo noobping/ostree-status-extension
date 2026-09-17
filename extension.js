@@ -24,7 +24,7 @@ export default class RpmOstreeStateExtension extends Extension {
             Main.panel._rightBox.insert_child_at_index(this._button, 0);
 
             // Clicking the button triggers an immediate refresh
-            this._buttonPressId = this._button.connect('button-press-event', () => {
+            this._clickedId = this._button.connect('clicked', () => {
                 this._updateState();
             });
 
@@ -61,10 +61,10 @@ export default class RpmOstreeStateExtension extends Extension {
             GLib.Source.remove(this._timeoutId);
             this._timeoutId = null;
         }
-        
-        if (this._buttonPressId && this._button) {
-            this._button.disconnect(this._buttonPressId);
-            this._buttonPressId = null;
+
+        if (this._clickedId && this._button) {
+            this._button.disconnect(this._clickedId);
+            this._clickedId = null;
         }
 
         // Remove and destroy the button from the panel
@@ -112,6 +112,7 @@ export default class RpmOstreeStateExtension extends Extension {
                         logError(new Error(stderr.trim() || 'rpm-ostree status failed'),
                             'Error processing Subprocess output');
                         this.disable();
+                        return;
                     }
 
                     // Decide which icon to display based on state

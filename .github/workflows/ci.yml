@@ -2,49 +2,103 @@ name: CI
 
 on:
   push:
-    branches:
-    - main
-    - master
+    branches: [main, master]
     paths-ignore:
-    - '**/*.md'
+      - "**/*.md"
   pull_request:
-    branches:
-    - main
-    - master
+    branches: [main, master]
     paths-ignore:
-    - '**/*.md'
-  workflow_dispatch:
+      - "**/*.md"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  gnome-shell-extension:
-    name: GNOME Shell 50 extension smoke test
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install noobping/ci
+      - name: Build with Pipeline
+        uses: noobping/pipeline@continuous
+        with:
+          arguments: |
+            --cap-jobs
+            4
+            build
+
+      - name: Upload extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: ostree-status-extension
+          path: dist/*.zip
+          if-no-files-found: error
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install shexli
+        run: python -m pip install --disable-pip-version-check shexli==0.2.1
+
+      - name: Install Pipeline and Just
         run: |
-          case "$(uname -m)" in
-            x86_64) ci_arch=amd64 ;;
-            aarch64) ci_arch=arm64 ;;
-            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-          esac
+          tests/install-ci-tools "$RUNNER_TEMP/pipeline-tools"
+          echo "$RUNNER_TEMP/pipeline-tools" >> "$GITHUB_PATH"
 
-          sudo curl -fsSL \
-            "https://github.com/noobping/ci/releases/download/continuous/ci-linux-${ci_arch}" \
-            -o /usr/local/bin/ci
-          sudo chmod +x /usr/local/bin/ci
-          ci self
+      - name: Lint with Pipeline
+        run: pipeline --cap-jobs 4 lint
 
-      - name: Run project CI
-        run: ci -vv run test
+      - name: Upload shexli report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shexli-report
+          path: dist/shexli.json
+          if-no-files-found: ignore
+
+  smoke:
+    name: GNOME Shell ${{ matrix.gnome }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fedora: "44"
+            gnome: "50"
+          - fedora: "45"
+            gnome: "51"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pipeline and Just
+        run: |
+          tests/install-ci-tools "$RUNNER_TEMP/pipeline-tools"
+          echo "$RUNNER_TEMP/pipeline-tools" >> "$GITHUB_PATH"
+
+      - name: Test with Pipeline
+        env:
+          GNOME_TEST_IMAGE: docker.io/library/fedora:${{ matrix.fedora }}
+          GNOME_TEST_VERSION: ${{ matrix.gnome }}
+        run: pipeline --cap-jobs 4 test
 
       - name: Upload GNOME Shell test log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gnome-shell-test-log
+          name: gnome-${{ matrix.gnome }}-test-log
           path: dist/gnome-shell-test.log
           if-no-files-found: ignore

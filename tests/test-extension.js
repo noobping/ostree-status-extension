@@ -64,7 +64,7 @@ export async function run() {
     assert(stateFile, 'RPM_OSTREE_TEST_STATE_FILE is not set');
 
     GLib.file_set_contents(stateFile, 'busy\n');
-    extensionState._updateState();
+    extensionState._button.emit('clicked', 1);
 
     await waitForButtonChild(
         extensionState,

@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly archive="$PWD/dist/ostree-status@noobping.dev.zip"
+
+run_native() (
+    set -euo pipefail
+
+    command -v dbus-run-session
+    command -v gnome-shell
+    command -v gnome-shell-test-tool
+
+    shell_version=$(gnome-shell --version)
+    printf '%s\n' "$shell_version"
+    gnome-shell-test-tool --version || true
+    gnome-shell-test-tool --help | grep -q -- '--extension'
+
+    if [[ -n ${EXPECTED_GNOME_SHELL:-} ]]; then
+        grep -Eq "^GNOME Shell ${EXPECTED_GNOME_SHELL}([.~-]|$)" <<<"$shell_version"
+    fi
+
+    test -s "$archive"
+
+    work=$(mktemp -d)
+    system_bus_pid=''
+    cleanup() {
+        if [[ -n $system_bus_pid ]]; then
+            kill "$system_bus_pid" 2>/dev/null || true
+        fi
+        rm -rf -- "$work"
+    }
+    trap cleanup EXIT
+
+    mkdir -p "$work/bin" "$work/runtime"
+    cat >"$work/bin/rpm-ostree" <<'EOF'
+#!/bin/sh
+set -eu
+
+state="${RPM_OSTREE_TEST_STATE:-idle}"
+if [ -n "${RPM_OSTREE_TEST_STATE_FILE:-}" ] && [ -r "$RPM_OSTREE_TEST_STATE_FILE" ]; then
+    state=$(cat "$RPM_OSTREE_TEST_STATE_FILE")
+fi
+printf 'State: %s\n' "$state"
+EOF
+    chmod +x "$work/bin/rpm-ostree"
+
+    export G_MESSAGES_DEBUG='GNOME Shell'
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export NO_AT_BRIDGE=1
+    export PATH="$work/bin:$PATH"
+    export RPM_OSTREE_TEST_STATE_FILE="$work/rpm-ostree-state"
+    export XDG_RUNTIME_DIR="$work/runtime"
+    printf 'idle\n' >"$RPM_OSTREE_TEST_STATE_FILE"
+    rpm-ostree status
+
+    system_bus_output=$(dbus-daemon --session --fork --print-address=1 --print-pid=1)
+    DBUS_SYSTEM_BUS_ADDRESS=$(sed -n '1p' <<<"$system_bus_output")
+    system_bus_pid=$(sed -n '2p' <<<"$system_bus_output")
+    export DBUS_SYSTEM_BUS_ADDRESS
+
+    log_file="${GNOME_TEST_LOG:-$PWD/dist/gnome-shell-test.log}"
+    mkdir -p "$(dirname "$log_file")"
+
+    set +e
+    timeout --foreground --verbose 180s \
+        dbus-run-session -- \
+            gnome-shell-test-tool \
+                --headless \
+                --disable-animations \
+                --extension "$archive" \
+                tests/test-extension.js \
+        >"$log_file" 2>&1
+    status=$?
+    set -e
+
+    cat "$log_file"
+    printf 'gnome-shell-test-tool exited with status %s\n' "$status"
+    exit "$status"
+)
+
+if [[ ${1:-} == '--native' ]]; then
+    run_native
+    exit
+fi
+
+if command -v gnome-shell-test-tool >/dev/null 2>&1; then
+    run_native
+    exit
+fi
+
+if [[ -n ${CONTAINER_ENGINE:-} ]]; then
+    engine=$(command -v "$CONTAINER_ENGINE")
+elif command -v podman >/dev/null 2>&1; then
+    engine=$(command -v podman)
+elif command -v docker >/dev/null 2>&1; then
+    engine=$(command -v docker)
+else
+    echo 'GNOME Shell test tooling is absent and neither Podman nor Docker is available' >&2
+    exit 1
+fi
+
+image="${GNOME_TEST_IMAGE:-docker.io/library/fedora:45}"
+expected_version="${GNOME_TEST_VERSION:-51}"
+mkdir -p dist
+
+set +e
+"$engine" run --rm --pull=missing --security-opt label=disable \
+    --volume "$PWD:/work:ro" \
+    --workdir /work \
+    --env "EXPECTED_GNOME_SHELL=$expected_version" \
+    --env GNOME_TEST_LOG=/tmp/gnome-shell-test.log \
+    "$image" \
+    bash -ceu '
+        dnf --quiet install --assumeyes --setopt=install_weak_deps=False \
+            dbus-daemon dbus-tools gnome-shell mesa-dri-drivers >/dev/null
+        dnf clean all >/dev/null
+        /work/tests/test-gnome-shell --native
+    ' 2>&1 | tee dist/gnome-shell-test.log
+status=${PIPESTATUS[0]}
+set -e
+
+exit "$status"

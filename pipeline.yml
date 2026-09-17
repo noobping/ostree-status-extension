@@ -1,0 +1,49 @@
+version: 1
+
+on:
+  pre-commit: [check]
+  pre-push: [check]
+  pre-receive: [check]
+
+pipelines:
+  check:
+    jobs:
+      assets:
+        just: check-assets
+      javascript:
+        just: check-javascript
+      just:
+        just: check-just
+      metadata:
+        just: check-metadata
+      shell:
+        just: check-shell
+      whitespace:
+        just: check-whitespace
+
+  lint:
+    needs: [check]
+    jobs:
+      shexli:
+        just: shexli
+
+  build:
+    needs: [check]
+    jobs:
+      package:
+        just: package
+
+  test:
+    needs: [build]
+    jobs:
+      gnome-shell:
+        just: container-test
+
+  install-local:
+    needs: [check]
+    jobs:
+      install:
+        just: install-files
+
+  ci:
+    needs: [lint, test]

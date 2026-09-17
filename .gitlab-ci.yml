@@ -1,0 +1,71 @@
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - when: never
+
+stages:
+  - verify
+
+build:
+  stage: verify
+  image:
+    name: registry.gitlab.com/noobping/pipeline:latest
+    entrypoint: [""]
+  interruptible: true
+  script:
+    - pipeline --cap-jobs 4 build
+  artifacts:
+    name: ostree-status-extension
+    paths:
+      - dist/*.zip
+    expire_in: 30 days
+
+lint:
+  stage: verify
+  image: python:3.13-slim
+  interruptible: true
+  before_script:
+    - apt-get update
+    - apt-get install --yes --no-install-recommends ca-certificates curl git
+    - rm -rf /var/lib/apt/lists/*
+    - python -m pip install --disable-pip-version-check --no-cache-dir shexli==0.2.1
+    - tests/install-ci-tools /tmp/pipeline-tools
+    - export PATH="/tmp/pipeline-tools:$PATH"
+  script:
+    - pipeline --cap-jobs 4 lint
+  artifacts:
+    when: always
+    name: shexli-report
+    paths:
+      - dist/shexli.json
+    expire_in: 30 days
+
+smoke:
+  stage: verify
+  image: "fedora:${FEDORA_VERSION}"
+  interruptible: true
+  parallel:
+    matrix:
+      - FEDORA_VERSION: "44"
+        GNOME_VERSION: "50"
+      - FEDORA_VERSION: "45"
+        GNOME_VERSION: "51"
+  before_script:
+    - >-
+      dnf --quiet install --assumeyes --setopt=install_weak_deps=False
+      ca-certificates curl dbus-daemon dbus-tools git gnome-shell
+      gzip mesa-dri-drivers tar
+    - dnf clean all
+    - tests/install-ci-tools /tmp/pipeline-tools
+    - export PATH="/tmp/pipeline-tools:$PATH"
+  script:
+    - EXPECTED_GNOME_SHELL="$GNOME_VERSION" pipeline --cap-jobs 4 test
+  artifacts:
+    when: always
+    name: "gnome-${GNOME_VERSION}-test-log"
+    paths:
+      - dist/gnome-shell-test.log
+    expire_in: 30 days
